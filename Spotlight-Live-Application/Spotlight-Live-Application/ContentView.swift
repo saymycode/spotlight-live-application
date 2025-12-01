@@ -1,21 +1,12 @@
-//
-//  ContentView.swift
-//  Spotlight-Live-Application
-//
-//  Created by Funda Demirtopuz on 1.12.2025.
-//
-
 import SwiftUI
+import Observation
 
 struct ContentView: View {
+    @State private var appState = AppState()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        RootView()
+            .environment(appState)
     }
 }
 
