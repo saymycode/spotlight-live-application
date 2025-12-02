@@ -38,6 +38,7 @@ struct MapTabView: View {
     @State private var mapPosition = MapCameraPosition.region(.init(center: CLLocationCoordinate2D(latitude: 41.015137, longitude: 28.979530), span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)))
     @State private var showCreate = false
     @State private var showFilters = false
+    @State private var lastCenter: CLLocationCoordinate2D?
 
     var body: some View {
         NavigationStack {
@@ -66,15 +67,22 @@ struct MapTabView: View {
                     MapCompass()
                 }
                 .onMapCameraChange { context in
-                    if let center = context.region?.center {
-                        Task { await viewModel.fetchEvents(appState: appState, coordinate: center) }
+                    let center = context.region.center
+                    lastCenter = center
+                    Task {
+                        await viewModel.fetchEvents(appState: appState, coordinate: center)
                     }
                 }
+
                 .sheet(item: $viewModel.selectedEvent) { event in
                     EventDetailView(eventId: event.id)
                 }
                 .task {
                     appState.locationManager.request()
+                    if let coordinate = appState.locationManager.lastLocation?.coordinate {
+                        lastCenter = coordinate
+                        mapPosition = .region(MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)))
+                    }
                     await viewModel.loadInitial(appState: appState)
                 }
 
@@ -90,6 +98,7 @@ struct MapTabView: View {
                     Spacer()
                     Button {
                         if let coordinate = appState.locationManager.lastLocation?.coordinate {
+                            lastCenter = coordinate
                             mapPosition = .region(MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)))
                         }
                     } label: {
@@ -128,16 +137,10 @@ struct MapTabView: View {
     }
 
     private func currentCenter() -> CLLocationCoordinate2D? {
-        switch mapPosition {
-        case .automatic:
-            return appState.locationManager.lastLocation?.coordinate
-        case .region(let region):
-            return region.center
-        case .camera(let camera):
-            return camera.centerCoordinate
-        @unknown default:
-            return nil
+        if let lastCenter {
+            return lastCenter
         }
+        return appState.locationManager.lastLocation?.coordinate
     }
 }
 

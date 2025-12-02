@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+internal import _LocationEssentials
 
 @Observable
 @MainActor
@@ -31,7 +32,10 @@ struct MyEventsView: View {
                 Section("Oluşturduklarım") {
                     ForEach(viewModel.createdEvents, id: \.id) { event in
                         NavigationLink(value: event.id) {
-                            EventRow(event: event, userLocation: appState.locationManager.lastLocation?.coordinate)
+                            EventRow(
+                                event: event,
+                                userLocation: appState.locationManager.lastLocation?.coordinate
+                            )
                         }
                     }
                 }
