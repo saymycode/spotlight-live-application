@@ -16,6 +16,11 @@ final class AppState {
     init() {
         self.token = TokenStore.shared.load()
         Task { await api.setToken(token) }
+        Task {
+            if let token, let user = await api.restoreUserFromToken(token) {
+                currentUser = user
+            }
+        }
         Task { await refreshCategoriesIfNeeded() }
     }
 
