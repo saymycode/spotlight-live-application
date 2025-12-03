@@ -16,11 +16,7 @@ final class AppState {
     init() {
         self.token = TokenStore.shared.load()
         Task { await api.setToken(token) }
-        Task {
-            if let token, let user = await api.restoreUserFromToken(token) {
-                currentUser = user
-            }
-        }
+        Task { await restoreFirebaseSession() }
         Task { await refreshCategoriesIfNeeded() }
     }
 
@@ -37,11 +33,20 @@ final class AppState {
         token = response.token
         currentUser = response.user
         await api.setToken(token)
+        TokenStore.shared.save(token: token)
     }
 
     func logout() async {
         token = nil
         currentUser = nil
+        await api.logout()
         await api.setToken(nil)
+        TokenStore.shared.save(token: nil)
+    }
+
+    private func restoreFirebaseSession() async {
+        if let session = await api.restoreSession() {
+            await updateAuth(with: session)
+        }
     }
 }

@@ -27,8 +27,12 @@ final class EventDetailViewModel {
     }
 
     func setAttendance(appState: AppState, eventId: String, status: AttendanceStatus) async {
+        guard let userId = appState.currentUser?.id else {
+            errorMessage = "Katılım güncellemek için giriş yapmalısınız"
+            return
+        }
         do {
-            let record = try await appState.api.setAttendance(eventId: eventId, status: status)
+            let record = try await appState.api.setAttendance(eventId: eventId, status: status, userId: userId)
             myStatus = record.status
             if let index = attendance.firstIndex(where: { $0.id == record.id }) {
                 attendance[index] = record

@@ -21,6 +21,7 @@ final class CreateEventViewModel {
 
     func submit(appState: AppState) async throws -> Event {
         guard let coordinate else { throw URLError(.badURL) }
+        guard let userId = appState.currentUser?.id else { throw URLError(.userAuthenticationRequired) }
         isSubmitting = true
         defer { isSubmitting = false }
         let request = CreateEventRequest(
@@ -33,7 +34,7 @@ final class CreateEventViewModel {
             endTimeUtc: endDate,
             isPublic: isPublic
         )
-        return try await appState.api.createEvent(request)
+        return try await appState.api.createEvent(request, userId: userId)
     }
 }
 

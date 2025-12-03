@@ -39,13 +39,14 @@ struct MapTabView: View {
     @State private var showCreate = false
     @State private var showFilters = false
     @State private var lastCenter: CLLocationCoordinate2D?
+    @State private var selectedEventId: Event.ID?
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .topTrailing) {
-                Map(position: $mapPosition, selection: $viewModel.selectedEvent) {
+                Map(position: $mapPosition, selection: $selectedEventId) {
                     ForEach(viewModel.filteredEvents) { event in
-                        Annotation(event.title, coordinate: event.coordinate) {
+                        Annotation(event.title, value: event.id, coordinate: event.coordinate) {
                             VStack {
                                 Image(systemName: "mappin.circle.fill")
                                     .foregroundStyle(event.categoryKey.defaultColor)
@@ -57,7 +58,7 @@ struct MapTabView: View {
                                     .cornerRadius(8)
                             }
                             .onTapGesture {
-                                viewModel.selectedEvent = event
+                                selectedEventId = event.id
                             }
                         }
                     }
@@ -66,7 +67,7 @@ struct MapTabView: View {
                     MapUserLocationButton()
                     MapCompass()
                 }
-                .onMapCameraChange { context in
+                .onMapCameraChange(frequency: .onEnd) { context in
                     let center = context.region.center
                     lastCenter = center
                     Task {
@@ -74,7 +75,7 @@ struct MapTabView: View {
                     }
                 }
 
-                .sheet(item: $viewModel.selectedEvent) { event in
+                .sheet(item: $viewModel.selectedEvent, onDismiss: { selectedEventId = nil }) { event in
                     EventDetailView(eventId: event.id)
                 }
                 .task {
@@ -84,6 +85,19 @@ struct MapTabView: View {
                         mapPosition = .region(MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)))
                     }
                     await viewModel.loadInitial(appState: appState)
+                }
+                .onChange(of: selectedEventId) { _, newValue in
+                    if let id = newValue {
+                        viewModel.selectedEvent = viewModel.events.first(where: { $0.id == id })
+                    } else {
+                        viewModel.selectedEvent = nil
+                    }
+                }
+                .onChange(of: viewModel.events) { _, _ in
+                    if let id = selectedEventId,
+                       let event = viewModel.events.first(where: { $0.id == id }) {
+                        viewModel.selectedEvent = event
+                    }
                 }
 
                 VStack(alignment: .trailing, spacing: 12) {

@@ -11,10 +11,14 @@ final class MyEventsViewModel {
     var errorMessage: String?
 
     func fetch(appState: AppState) async {
+        guard let userId = appState.currentUser?.id else {
+            errorMessage = "Oturum bulunamadı"
+            return
+        }
         isLoading = true
         errorMessage = nil
         do {
-            createdEvents = try await appState.api.fetchMyEvents()
+            createdEvents = try await appState.api.fetchMyEvents(userId: userId)
         } catch {
             errorMessage = "Etkinlikler getirilemedi"
         }
