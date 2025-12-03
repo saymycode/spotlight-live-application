@@ -8,8 +8,9 @@ final class ProfileViewModel {
     var attendedCount: Int = 0
 
     func load(appState: AppState) async {
+        guard let userId = appState.currentUser?.id else { return }
         do {
-            let events = try await appState.api.fetchMyEvents()
+            let events = try await appState.api.fetchMyEvents(userId: userId)
             eventsCreated = events.count
         } catch {
             eventsCreated = 0
