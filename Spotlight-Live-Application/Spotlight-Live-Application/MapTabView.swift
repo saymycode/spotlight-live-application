@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import Observation
+import FirebaseFirestore
 
 @Observable
 @MainActor
@@ -10,25 +11,39 @@ final class MapViewModel {
     var selectedEvent: Event?
     var filters = EventFilters()
     var errorMessage: String?
+    @ObservationIgnored var listener: ListenerRegistration?
 
     func loadInitial(appState: AppState) async {
         guard let coordinate = appState.locationManager.lastLocation?.coordinate else { return }
-        await fetchEvents(appState: appState, coordinate: coordinate)
+        await subscribe(appState: appState, coordinate: coordinate)
     }
 
-    func fetchEvents(appState: AppState, coordinate: CLLocationCoordinate2D) async {
+    func subscribe(appState: AppState, coordinate: CLLocationCoordinate2D) async {
+        stopListening()
         isLoading = true
         errorMessage = nil
-        do {
-            events = try await appState.api.fetchNearbyEvents(lat: coordinate.latitude, lng: coordinate.longitude, radiusKm: filters.radiusKm)
-        } catch {
-            errorMessage = "Etkinlikler yüklenemedi"
-        }
-        isLoading = false
+        listener = appState.api.observeNearbyEvents(
+            lat: coordinate.latitude,
+            lng: coordinate.longitude,
+            radiusKm: filters.radiusKm,
+            onUpdate: { [weak self] events in
+                self?.events = events
+                self?.isLoading = false
+            },
+            onError: { [weak self] _ in
+                self?.errorMessage = "Etkinlikler yüklenemedi"
+                self?.isLoading = false
+            }
+        )
     }
 
     var filteredEvents: [Event] {
         events.filter { filters.allows($0) }
+    }
+
+    func stopListening() {
+        listener?.remove()
+        listener = nil
     }
 }
 
@@ -43,7 +58,7 @@ struct MapTabView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .topTrailing) {
+            ZStack(alignment: .bottomTrailing) {
                 Map(position: $mapPosition, selection: $selectedEventId) {
                     ForEach(viewModel.filteredEvents) { event in
                         Annotation(event.title, value: event.id, coordinate: event.coordinate) {
@@ -63,6 +78,7 @@ struct MapTabView: View {
                         }
                     }
                 }
+                .ignoresSafeArea()
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
@@ -71,7 +87,7 @@ struct MapTabView: View {
                     let center = context.region.center
                     lastCenter = center
                     Task {
-                        await viewModel.fetchEvents(appState: appState, coordinate: center)
+                        await viewModel.subscribe(appState: appState, coordinate: center)
                     }
                 }
 
@@ -102,15 +118,6 @@ struct MapTabView: View {
 
                 VStack(alignment: .trailing, spacing: 12) {
                     Button {
-                        showFilters = true
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .padding(10)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                    Button {
                         if let coordinate = appState.locationManager.lastLocation?.coordinate {
                             lastCenter = coordinate
                             mapPosition = .region(MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)))
@@ -129,6 +136,14 @@ struct MapTabView: View {
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
                     }
+                    Button {
+                        showFilters = true
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
                 }
                 .padding()
             }
@@ -142,10 +157,13 @@ struct MapTabView: View {
             .sheet(isPresented: $showFilters) {
                 EventFilterSheet(filters: $viewModel.filters) {
                     if let center = currentCenter() {
-                        Task { await viewModel.fetchEvents(appState: appState, coordinate: center) }
+                        Task { await viewModel.subscribe(appState: appState, coordinate: center) }
                     }
                 }
                 .presentationDetents([.fraction(0.3)])
+            }
+            .onDisappear {
+                viewModel.stopListening()
             }
         }
     }

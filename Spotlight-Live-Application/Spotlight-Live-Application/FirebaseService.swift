@@ -12,6 +12,20 @@ struct FirestoreKeys {
     static let attendance = "attendance"
 }
 
+enum AuthFlowError: LocalizedError {
+    case emailVerificationRequired
+    case emailNotVerified
+
+    var errorDescription: String? {
+        switch self {
+        case .emailVerificationRequired:
+            return "E-posta doğrulaması gönderildi. Lütfen gelen kutunuzu kontrol ederek hesabınızı doğrulayın."
+        case .emailNotVerified:
+            return "Giriş yapmadan önce e-posta adresinizi doğrulamanız gerekiyor."
+        }
+    }
+}
+
 final class FirebaseService {
     static let shared = FirebaseService()
     private var isConfigured = false
@@ -28,6 +42,7 @@ final class FirebaseService {
 
     func register(email: String, password: String, displayName: String, city: String) async throws -> AuthResponse {
         let result = try await auth.createUser(withEmail: email, password: password)
+        try await result.user.sendEmailVerification()
         let profile = User(
             id: result.user.uid,
             displayName: displayName,
@@ -36,12 +51,16 @@ final class FirebaseService {
             createdAtUtc: Date()
         )
         try await saveUserProfile(profile)
-        let token = try await result.user.getIDToken()
-        return AuthResponse(token: token, user: profile)
+        try auth.signOut()
+        throw AuthFlowError.emailVerificationRequired
     }
 
     func login(email: String, password: String) async throws -> AuthResponse {
         let result = try await auth.signIn(withEmail: email, password: password)
+        guard result.user.isEmailVerified else {
+            try auth.signOut()
+            throw AuthFlowError.emailNotVerified
+        }
         let profile = try await fetchUserProfile(uid: result.user.uid)
         let token = try await result.user.getIDToken()
         return AuthResponse(token: token, user: profile)
@@ -87,6 +106,34 @@ final class FirebaseService {
             return distance <= radiusKm ? event : nil
         }
         return events
+    }
+
+    func observeNearbyEvents(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        onUpdate: @escaping ([Event]) -> Void,
+        onError: @escaping (Error) -> Void
+    ) -> ListenerRegistration {
+        let userLocation = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+        return db.collection(FirestoreKeys.events)
+            .order(by: "startTimeUtc")
+            .addSnapshotListener { snapshot, error in
+                if let error {
+                    onError(error)
+                    return
+                }
+
+                guard let documents = snapshot?.documents else { return }
+                let events: [Event] = documents.compactMap { doc in
+                    guard let event = try? doc.data(as: Event.self) else { return nil }
+                    let distance = DistanceCalculator.distanceKm(from: userLocation, to: event.coordinate)
+                    return distance <= radiusKm ? event : nil
+                }
+                DispatchQueue.main.async {
+                    onUpdate(events)
+                }
+            }
     }
 
     func fetchEventDetail(id: String) async throws -> Event {
