@@ -39,28 +39,18 @@ struct MapTabView: View {
     @State private var showCreate = false
     @State private var showFilters = false
     @State private var lastCenter: CLLocationCoordinate2D?
-    @State private var selectedEventId: Event.ID?
+    // Make selection type explicit to help the type checker.
+    @State private var selectedEventId: String?
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .topTrailing) {
                 Map(position: $mapPosition, selection: $selectedEventId) {
                     ForEach(viewModel.filteredEvents) { event in
-                        Annotation(event.title, value: event.id, coordinate: event.coordinate) {
-                            VStack {
-                                Image(systemName: "mappin.circle.fill")
-                                    .foregroundStyle(event.categoryKey.defaultColor)
-                                    .font(.title)
-                                Text(event.title)
-                                    .font(.caption)
-                                    .padding(4)
-                                    .background(.ultraThinMaterial)
-                                    .cornerRadius(8)
-                            }
-                            .onTapGesture {
-                                selectedEventId = event.id
-                            }
-                        }
+                        // Use Marker with value to match selection type (String)
+                        Marker(event.title, systemImage: "mappin.circle.fill", coordinate: event.coordinate)
+                            .tint(event.categoryKey.defaultColor)
+                            .tag(event.id)
                     }
                 }
                 .mapControls {
@@ -74,7 +64,6 @@ struct MapTabView: View {
                         await viewModel.fetchEvents(appState: appState, coordinate: center)
                     }
                 }
-
                 .sheet(item: $viewModel.selectedEvent, onDismiss: { selectedEventId = nil }) { event in
                     EventDetailView(eventId: event.id)
                 }
