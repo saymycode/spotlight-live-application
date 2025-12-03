@@ -1,5 +1,6 @@
 import Foundation
 import MapKit
+import FirebaseFirestore
 
 actor ApiClient {
     static let shared = ApiClient()
@@ -101,6 +102,22 @@ actor ApiClient {
             print("[ApiClient] createEvent failed. domain=\(nsError.domain) code=\(nsError.code) info=\(nsError.userInfo)")
             throw error
         }
+    }
+
+    func observeNearbyEvents(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        onUpdate: @escaping ([Event]) -> Void,
+        onError: @escaping (Error) -> Void
+    ) -> ListenerRegistration {
+        firebase.observeNearbyEvents(
+            lat: lat,
+            lng: lng,
+            radiusKm: radiusKm,
+            onUpdate: onUpdate,
+            onError: onError
+        )
     }
 
     func fetchEventAttendance(eventId: String) async throws -> [EventAttendance] {

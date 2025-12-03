@@ -75,11 +75,17 @@ struct CreateEventView: View {
                             }
                         }
                         .frame(height: 200)
+                        .contentShape(Rectangle())
                         .onTapGesture { location in
                             if let coordinate = reader.convert(location, from: .local) {
                                 updateMarker(coordinate)
                             }
                         }
+                        .simultaneousGesture(SpatialTapGesture().onEnded { gesture in
+                            if let coordinate = reader.convert(gesture.location, from: .local) {
+                                updateMarker(coordinate)
+                            }
+                        })
                     }
                 }
 
