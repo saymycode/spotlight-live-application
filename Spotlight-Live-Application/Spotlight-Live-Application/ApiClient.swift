@@ -1,5 +1,6 @@
 import Foundation
 import MapKit
+import FirebaseFirestore
 
 actor ApiClient {
     static let shared = ApiClient()
@@ -45,6 +46,22 @@ actor ApiClient {
 
     func createEvent(_ requestBody: CreateEventRequest, userId: String) async throws -> Event {
         try await firebase.createEvent(requestBody, userId: userId)
+    }
+
+    func observeNearbyEvents(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        onUpdate: @escaping ([Event]) -> Void,
+        onError: @escaping (Error) -> Void
+    ) -> ListenerRegistration {
+        firebase.observeNearbyEvents(
+            lat: lat,
+            lng: lng,
+            radiusKm: radiusKm,
+            onUpdate: onUpdate,
+            onError: onError
+        )
     }
 
     func fetchEventAttendance(eventId: String) async throws -> [EventAttendance] {

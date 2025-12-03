@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import Observation
+import FirebaseFirestore
 
 @Observable
 @MainActor
@@ -8,17 +9,31 @@ final class DiscoverViewModel {
     var events: [Event] = []
     var isLoading = false
     var errorMessage: String?
+    @ObservationIgnored var listener: ListenerRegistration?
 
     func fetch(appState: AppState) async {
         guard let coordinate = appState.locationManager.lastLocation?.coordinate else { return }
+        stopListening()
         isLoading = true
         errorMessage = nil
-        do {
-            events = try await appState.api.fetchNearbyEvents(lat: coordinate.latitude, lng: coordinate.longitude, radiusKm: 50)
-        } catch {
-            errorMessage = "Keşfet listesi alınamadı"
-        }
-        isLoading = false
+        listener = appState.api.observeNearbyEvents(
+            lat: coordinate.latitude,
+            lng: coordinate.longitude,
+            radiusKm: 50,
+            onUpdate: { [weak self] events in
+                self?.events = events
+                self?.isLoading = false
+            },
+            onError: { [weak self] _ in
+                self?.errorMessage = "Keşfet listesi alınamadı"
+                self?.isLoading = false
+            }
+        )
+    }
+
+    func stopListening() {
+        listener?.remove()
+        listener = nil
     }
 }
 
@@ -45,6 +60,9 @@ struct DiscoverView: View {
             .task {
                 appState.locationManager.request()
                 await viewModel.fetch(appState: appState)
+            }
+            .onDisappear {
+                viewModel.stopListening()
             }
             .refreshable {
                 await viewModel.fetch(appState: appState)
